@@ -1,0 +1,60 @@
+name: Build Mandy APK
+
+# Builds the Android APK automatically in GitHub's cloud -- no Linux
+# machine, no local Android SDK setup needed on your end.
+#
+# Triggers: every push to main/master, or manually via the "Run workflow"
+# button in the GitHub Actions tab.
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y python3-pip build-essential git python3 python3-dev \
+            ffmpeg libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
+            libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev zlib1g-dev \
+            openjdk-17-jdk unzip
+
+      - name: Install buildozer + cython
+        run: pip install --upgrade buildozer cython
+
+      - name: Build APK (debug)
+        run: buildozer -v android debug
+        env:
+          # Non-interactive: auto-accept Android SDK licenses
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mandy-apk
+          path: bin/*.apk
+
+      - name: Package the generated Android Studio (Gradle) project
+        run: |
+          DIST_DIR=$(find .buildozer/android/platform -maxdepth 2 -type d -name "dists")
+          PROJECT_DIR=$(find "$DIST_DIR" -mindepth 1 -maxdepth 1 -type d | head -1)
+          echo "Gradle project found at: $PROJECT_DIR"
+          mkdir -p android-studio-export
+          cp -r "$PROJECT_DIR" android-studio-export/mandy-android-project
+
+      - name: Upload Android Studio project artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mandy-android-studio-project
+          path: android-studio-export/mandy-android-project
